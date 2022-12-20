@@ -20,14 +20,21 @@
       border: solid;
       border-width: 5px;
       border-color: white;
+      box-sizing: border-box;
     }
+    .spymaster.blackSecret {
+      border-width: 10px;
+    }
+
     body{
       margin: 0px;
       background: grey;
+      min-width: 500px;
     }
     #theTable{
       border: solid;
-      border-color: red;
+      border-color: grey;
+      border-width: 5px;
     }
     .tint {
       position: relative;
@@ -73,83 +80,377 @@
     figure {
       margin: 0 0 0 0;
     }
-  </style>
-</head>
+    .codeList {
+      background-color: #fff;
+      color: #000;
+      padding: 0 8px 8px 8px;  
+      min-width: 800px;
+    }
 
-<body>
-  <div>
-    Hello!
-  </div>
-  <table id='theTable' style="width:100%">
-  </table>
+    .actionBar {
+      background-color: #fff;
+      color: #000;
+      min-width: 800px;
+    }
+    .actionBarContainer {
+      float: right;
+      padding: 8px 8px 8px 0;
+    }
+    .logoContainer {
+      float: left;
+      padding: 0 0 0 16px;
+    }
+    .logoImg {
+      height: 50px;
+      border: none;
+      float: left;
+      cursor: pointer;
+    }
+    button {
+      margin: 8px 8px 0 0;
+      padding: 4px;
+      cursor: pointer;
+    }
+    .codeInput {
+      margin: 8px 8px 0 0;
+      padding: 4px 6px;
+      font-size: 14px;
+      width: 80px;
+    }
+    .blueStats {
+      color: #0000ff;
+      font-weight: 600;
+      padding-left: 16px;
+      font-size: 16px;
+      font-family: Arial, Helvetica, sans-serif;
+    }    
+    .redStats {
+      color: #ff0000;
+      font-weight: 600;    
+      padding-left: 16px;
+      font-size: 16px;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .kaboom {
+      color: #000;
+      font-weight: 700;    
+      padding-left: 16px;
+      font-size: 16px;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .title {
+      font-weight: bold;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 18px;
+      margin: 14px 0 0 16px;
+      float: left;
+    }
+    .message {
+      font-weight: normal;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 16px;
+      margin: 14px 8px 0 16px;
+      float: left;
+      color: #ff0000;
+    }
+    .leftButton {
+      float: left;
+      margin-left: 16px;
+      margin-top: 8px;
+    }
+
+  </style>
   <script src="seedrandom.js"></script>
   <script>
+    var codeBoxMap = {};
     var spymaster = false;
-    if(window.location.hash) {
-      var hash = window.location.hash.substring(1).toLowerCase();
-      if(hash.charAt(0) === '?'){
-        hash = hash.substring(1);
-        spymaster = true;
-      } else {
-        //do something
-      }
-      Math.seedrandom(hash);
+    var code = "";
+    var selectionMap = {};
+    var sessionMap = {};
+    var codeHistoryMap = {};
+    var teamsMap = {};
+    var message = '';
+    var blueTileCount = redTileCount = 0;
+    var redCount = blueCount = 0;
+    var kaboom = false;
+    var logoIndex = parseInt(localStorage.getItem('logoIndex')) || 0;
+    var logoList = [
+    "img/blackhat.png",
+    "img/fedora.png",
+    "img/bowler.png",
+    "img/spy1.png",
+    "img/mata1.png",
+    "img/spy2.png",
+    "img/mata2.png",
+    "img/spy3.png",
+    "img/mata3.png",
+    "img/spy4.png",
+    "img/mata4.png",
+    ];
+  </script>
+  
+  <script>
+    function testDups() {
+      console.log('==== Test start ====');
+      var myMap = {};
+      var rc = true;
+      Object.values(codeHistoryMap).forEach((current) => {
+        current.forEach((el) => {
+          if (myMap[el]) {
+            console.log('==== duplicate:', current, el);
+            rc =  false;
+          }
+          myMap[el] = true;
+        })
+      });
+      console.log('==== Test stop ====', codeHistoryMap);
+      return rc;
+    };
+    function setGameStats() {
+      redCount = redTileCount - $('.red').length;
+      blueCount = blueTileCount - $('.blue').length;
+      blackTiles = $('.t5').length;
+
+      $('#redStats').text(redCount ? redCount : 'Winner!');
+      $('#blueStats').text(blueCount ? blueCount : 'Winner!');
+      $('#kaboom').text(blackTiles > 0 ? 'KABOOM!' : '');
     }
-      (function(){
-        var arr = [];
-      while(arr.length < 25){
-             var randomnumber= Math.floor((Math.random() * 278));
-             var found=false;
-             for(var i=0;i<arr.length;i++){
-            if(arr[i]===randomnumber){found=true;break;}
-             }
-             if(!found) arr.push(randomnumber);
+    function renderBoard(props = {}) {
+      var reset = props.reset; 
+      var ignoreSession = props.ignoreSession;
+      if (reset) {
+        selectionMap = {};
       }
+      if (code.length) {
+        Math.seedrandom(code);
+      }
+      if (render(spymaster, ignoreSession)) { 
+        onReset('Out of cards.'); // reset was requiested
+      }
+    }
+    function codeFieldsInit() {
+      if (codeBoxMap["codeId1"] !== undefined) return;
+      for (var i = 1; i <= 10; i++) {
+        var codeBoxId = "codeId" + i;
+        codeBoxMap[codeBoxId] = document.getElementById(codeBoxId);
+      }
+    }
+    function renderCodeFields(config = {}) {
+      codeFieldsInit();
+      var applyButton = document.getElementById("applyId");
+      if (config.reset) {
+        for (var i = 1; i <= 10; i++) {
+          var codeBoxId = "codeId" + i;
+          var codeBox = codeBoxMap[codeBoxId];
+          codeBox.value = '';
+          codeBox.disabled = i > 1;
+        }
+        applyButton.disabled = true;
+      }
+      if (config.update) {
+        var emptyIndex;
+        var dirtyIndex;
+        var codeValueMap = {};
+        var hasDoubles = false;
+        for (var i = 1; i <= 10; i++) {
+          var codeBoxId = "codeId" + i;
+          var codeBox = codeBoxMap[codeBoxId];
+          var value = codeBox.value && codeBox.value.trim();
+          if (emptyIndex === undefined && (!value || value === '')) {
+            emptyIndex = i;
+          }
+          if (codeBox.value && codeBox.value.length > 0) {
+            dirtyIndex = i;
+          }
+          codeBox.disabled = emptyIndex && emptyIndex < i;
+          if (value) {
+            if (codeValueMap[value]) {
+              hasDoubles = true;
+            } else { 
+              codeValueMap[value] = true;  
+            }
+          }
+        }
+        applyButton.disabled = hasDoubles || dirtyIndex && emptyIndex && emptyIndex < dirtyIndex; 
+        if (!codeBoxMap['codeId1'].value || codeBoxMap['codeId1'].value.trim().length === 0) {
+          applyButton.disabled = true;
+        }
+      }
+    }
 
-      var imgWidth = $(window).width() / 5.5;
+    function onLoad() {
+      var img = document.getElementById('logoImg');
+      img.src = logoList[logoIndex % logoList.length];
+      renderCodeFields({reset: true}); // reset code list, set round to 1, disable extra code fields
+      renderBoard({reset: true});
+      $('#codeId1').focus();
+    }
+    
+    function onReset(msg) {
+      spymaster = false;
+      code = '';
+      message = msg || '';
+      selectionMap = {};
+      sessionMap = {};
+      codeHistoryMap = {};
+      teamsMap = {};
+      renderCodeFields({ reset: true }); 
+      renderBoard({reset: true});
+    }
+    function onInputChange(config) {
+      config.update = true;
+      renderCodeFields(config); // show next code field if current is not empty
+    }
+    function onKeyPress(event) {
+      if (event.keyCode == 13) {
+        onApplyClick();  
+      }
+    }
+
+    function onApplyClickWorker(newCode) {
+      if (code === newCode) return;
+      code = newCode;
+      spymaster = false;
+      message = '';
+      selectionMap = {};
+      message = '';
+      // var ignoreSession = !!codeHistoryMap[code]; // we are reusing previous code, allow re-use of tiles
+      codeHistoryMap[code] = codeHistoryMap[code] || [];
+      teamsMap[code] = teamsMap[code] || [];
+      // renderBoard({reset: true, ignoreSession: ignoreSession});
+      renderBoard({reset: true, ignoreSession: false});
+    }
+
+    function onApplyClick() {
+      code = '';
+      var acc = '';
+      codeHistoryMap = {};
+      sessionMap = {};
+      for (var i = 1; i <= 10; i++) {
+        var codeBoxId = "codeId" + i;
+        var codeBox = codeBoxMap[codeBoxId];
+        if (!codeBox.value || codeBox.value === '') {
+          break;
+        }
+        codeBox.value = codeBox.value.trim();
+        acc += (codeBox.value + '/');
+        onApplyClickWorker(acc);
+      }
+      // testDups();
+    }
+
+    function onSpyMasterClick() {
+      spymaster = !spymaster && !!code.length;
+      renderBoard();
+    }
+    function onLogoClick(img) {
+      img.src = logoList[++logoIndex % logoList.length];
+      localStorage.setItem('logoIndex', logoIndex);
+    }
+    function render(isSpymaster, ignoreSession) {
+      $('#theTable').html('');
+      $('#messageId').html(message);
+      if (!code.length) {
+        return false; // no reset is required
+      };
+      var arr = [];
+      if (codeHistoryMap[code].length) {
+        arr = codeHistoryMap[code];
+      } else {
+        while(arr.length < 25) {
+          var randomnumber= Math.floor((Math.random() * 278));
+          var found=false;
+          for(var i=0;i<arr.length;i++){
+            var ignorePreviousUse  = false;
+            if (ignoreSession) {
+              ignorePreviousUse =  codeHistoryMap[code] && sessionMap[randomnumber]; // ignore only if the number was used with the current code; 
+            }
+            if(arr[i] === randomnumber || (!ignorePreviousUse) && sessionMap[randomnumber]) {
+              found=true;
+              break;
+            } 
+          }
+          if(!found && !sessionMap[randomnumber]) {
+            arr.push(randomnumber);
+            sessionMap[randomnumber] = true;
+          }
+          // var rc = testDups();
+          // if (!rc) debugger;
+          if (Object.keys(sessionMap).length >= 278) return true; // used up all the tiles - session reset is required. 
+          if (arr.length) {
+            codeHistoryMap[code] = arr;      
+          }
+        }
+      }
+      var winWidth = document.documentElement.clientWidth;
+      var winHeight = document.documentElement.clientHeight;
+      var headerHeight = winWidth > 924 ? 55 : 105;
+      var imgWidth = winWidth / 5.5;
       var imgHeight = imgWidth * 5 / 8;
-
-      if(imgHeight * 5 > $(window).height()){
-        imgHeight = $(window).height() / 5.5;
+      var boardHeight = winHeight - headerHeight; // Less header height
+      if(imgHeight * 5 > boardHeight){
+        imgHeight = boardHeight / 5.5;
         imgWidth = imgHeight * 8 / 5;        
       }
       var arrCounter = 0;
+      // Populate board  
       for(var i = 0;i < 5; i++){
-        
         $('#theTable').append('<tr id="row' + i + '""></tr>');
         for (var j = 0;j < 5; j++){
-          $('#row' + i).append('<td><img src="assets/pix' + arr[arrCounter++] + '.png" style="width: ' + imgWidth + 'px; height: ' + imgHeight +'px;"></td>');
+          $('#row' + i).append('<td><img id="tile' + arrCounter + '" class="tile" src="assets/pix' + arr[arrCounter++] + '.png" style="width: ' + imgWidth + 'px; height: ' + imgHeight +'px;"></td>');
         }
       }
       var teams = [];
-      //9 8 1 7     
-      for(var i = 0;i<7;i++){
+      for (var i = 0; i < teamsMap[code].length; i++) {
+        teams.push(teamsMap[code][i]);
+      }
+      //9 8 1 7    
+      if (teams.length === 0) { 
+        for(var i = 0;i<7;i++){
+          teams.push('redSecret');
+          teams.push('blueSecret');
+          teams.push('yellowSecret');
+        }
         teams.push('redSecret');
         teams.push('blueSecret');
-        teams.push('yellowSecret');
+        teams.push('blackSecret');
+        //random starter team
+        if(Math.floor((Math.random() * 2) + 1) % 2 === 0){
+            teams.push('redSecret');
+            //make border red
+        } else {
+          teams.push('blueSecret');
+        }
+        shuffle(teams);
+        teamsMap[code] = [];
+        for (var i = 0; i < teams.length; i++) {
+          teamsMap[code].push(teams[i]);
+        }
+     }
+      blueTileCount = redTileCount = 0;
+      for (var i = 0; i < teams.length; i++) {
+        if (teams[i] === 'blueSecret') {
+          blueTileCount++;
+        }
+        if (teams[i] === 'redSecret') {
+          redTileCount++;
+        }
       }
-      teams.push('redSecret');
-      teams.push('blueSecret');
-      teams.push('blackSecret');
-      //random starter team
-      if(Math.floor((Math.random() * 2) + 1) % 2 === 0){
-          teams.push('redSecret');
-          //make border red
-      } else {
-        teams.push('blueSecret');
+      blueCount = blueTileCount;
+      redCount = redTileCount;
+      kaboom = false;  
+      if (blueTileCount > redTileCount) {
         $('#theTable').css('border-color', 'blue');
+      } 
+      if  (blueTileCount < redTileCount) {
+        $('#theTable').css('border-color', 'red');
       }
-
-
-      shuffle(teams);
-      $( "img" ).each(function() {
+      $( 'img.tile' ).each(function() {
         $(this).addClass(teams.pop());
       });
-
-
-      if(spymaster){
-        $('img').addClass('spymaster');
-        $('img').each(function(){
+      if(isSpymaster){
+        $('img.tile').addClass('spymaster');
+        $('img.tile').each(function() {
           if($(this).hasClass('redSecret')){
             $(this).css('border-color', 'red');
           } else if($(this).hasClass('blueSecret')){
@@ -161,23 +462,41 @@
           }  
         });
 
-        $('img').bind('click', function(){
-          $(this).wrap('<figure class="tint green"></figure>');
-        });
-      } else {
-        $('img').bind('click', function(){
-          if($(this).hasClass('redSecret')){
-            $(this).wrap('<figure class="tint red"></figure>');
-          } else if($(this).hasClass('blueSecret')){
-            $(this).wrap('<figure class="tint blue"></figure>');
-          } else if($(this).hasClass('yellowSecret')){
-            $(this).wrap('<figure class="tint yellow"></figure>');
-          } else if($(this).hasClass('blackSecret')){
-            $(this).wrap('<figure class="tint t5"></figure>');
-          }  
-        }); 
-      }
-    })();
+      } 
+      $('img.tile').bind('click', function(){
+        setSelectionMap(this);
+        if($(this).hasClass('redSecret')){
+          $(this).wrap('<figure class="tint red"></figure>');
+        } else if($(this).hasClass('blueSecret')){
+          $(this).wrap('<figure class="tint blue"></figure>');
+        } else if($(this).hasClass('yellowSecret')){
+          $(this).wrap('<figure class="tint yellow"></figure>');
+        } else if($(this).hasClass('blackSecret')){
+          $(this).wrap('<figure class="tint t5"></figure>');
+        } 
+        setGameStats(); 
+      }); 
+      
+      $('img.tile').each(function(){
+        if(selectionMap[this.id]){
+          $(this).wrap('<figure class="tint ' + selectionMap[this.id] + '"></figure>');
+        }
+      }); 
+      setGameStats();
+      return false; // successfully rendered the board, no reset required
+    };
+  
+    function setSelectionMap(tile) {
+      if($(tile).hasClass('redSecret')){
+        selectionMap[tile.id] = "red";
+      } else if($(tile).hasClass('blueSecret')){
+        selectionMap[tile.id] = "blue";
+      } else if($(tile).hasClass('yellowSecret')){
+        selectionMap[tile.id] = "yellow";
+      } else if($(tile).hasClass('blackSecret')){
+        selectionMap[tile.id] = "t5";
+      }  
+    }
 
     function shuffle(array) {
       var currentIndex = array.length, temporaryValue, randomIndex;
@@ -197,8 +516,39 @@
 
       return array;
     }
-
   </script>
+</head>
 
+<body onload="onLoad()" onresize="renderBoard(false, true)">
+  <div class="actionBar">
+    <div class="logoContainer">
+      <img id="logoImg" class="logoImg"  onclick="onLogoClick(this)" src="img/blank.png" />
+      <span id="promptId" class="title" title="08/18/2021, 06:47 PM">Welcome to KodeNames!</span>
+      <button id="spyMasterId" class="leftButton" onclick="onSpyMasterClick()">Spy Master</button>
+      <span id="messageId" class="message"></span>
+    </div>
+    <button id="applyId" onclick="onApplyClick()">Apply</button>
+    <button id="resetId" onclick="onReset()">Reset</button>
+    <span id="redStats" class="redStats"></span>
+    <span id="blueStats" class="blueStats"></span>
+    <span id="kaboom" class="kaboom"></span>
+  <div class="actionBarContainer">
+    </div>
+    <div style="clear: both;"></div>
+  </div>
+  <div class="codeList" id="codeListId">
+    <input id="codeId1" class="codeInput" type="text" placeholder="Round 1" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 1, value: this.value })" />
+    <input id="codeId2" class="codeInput" type="text" placeholder="Round 2" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 2, value: this.value })" />
+    <input id="codeId3" class="codeInput" type="text" placeholder="Round 3" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 3, value: this.value })" />
+    <input id="codeId4" class="codeInput" type="text" placeholder="Round 4" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 4, value: this.value })" />
+    <input id="codeId5" class="codeInput" type="text" placeholder="Round 5" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 5, value: this.value })" />
+    <input id="codeId6" class="codeInput" type="text" placeholder="Round 6" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 6, value: this.value })" />
+    <input id="codeId7" class="codeInput" type="text" placeholder="Round 7" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 7, value: this.value })" />
+    <input id="codeId8" class="codeInput" type="text" placeholder="Round 8" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 8, value: this.value })" />
+    <input id="codeId9" class="codeInput" type="text" placeholder="Round 9" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 9, value: this.value })" />
+    <input id="codeId10" class="codeInput" type="text" placeholder="Round 10" maxlength="10" onkeypress="return onKeyPress(event)" onkeyup="onInputChange({ round: 10, value: this.value })" />
+</div>
+  <table id='theTable' style="width:100%">
+  </table>
 </body>
 </html>
